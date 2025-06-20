@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Calendar as CalendarIcon, Plus, Edit, Trash2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -9,12 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { GoogleCalendarSync } from "@/components/GoogleCalendarSync";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
 const mockAppointments = [
-  { id: 1, time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink" },
-  { id: 2, time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500" },
-  { id: 3, time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500" },
-  { id: 4, time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500" },
+  { id: 1, time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink", source: "local" },
+  { id: 2, time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500", source: "local" },
+  { id: 3, time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500", source: "local" },
+  { id: 4, time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500", source: "local" },
 ];
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -24,6 +25,7 @@ export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState(3);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [appointments, setAppointments] = useState(mockAppointments);
   const [formData, setFormData] = useState({
     title: "",
     client: "",
@@ -32,11 +34,24 @@ export default function Calendar() {
     date: ""
   });
 
-  const handleCreateAppointment = () => {
+  const { createEvent } = useGoogleCalendar();
+
+  const handleCreateAppointment = async () => {
     console.log("Creating appointment:", formData);
+
+    // Criar no Google Calendar também
+    if (formData.title && formData.time && formData.date) {
+      await createEvent({
+        title: formData.title,
+        start: `${formData.date}T${formData.time}:00`,
+        end: `${formData.date}T${formData.time}:00`,
+        description: `Cliente: ${formData.client}\nProfissional: ${formData.employee}`
+      });
+    }
+
     toast({
       title: "Agendamento criado!",
-      description: "O compromisso foi adicionado ao calendário.",
+      description: "O compromisso foi adicionado ao calendário e sincronizado com o Google Calendar.",
     });
     setIsDialogOpen(false);
     setFormData({ title: "", client: "", employee: "", time: "", date: "" });
@@ -60,6 +75,24 @@ export default function Calendar() {
       title: "Agendamento excluído!",
       description: "O compromisso foi removido do calendário.",
     });
+  };
+
+  const handleGoogleEventsSync = (googleEvents: any[]) => {
+    // Adicionar eventos do Google ao estado local
+    const formattedGoogleEvents = googleEvents.map((event, index) => ({
+      id: `google-${index}`,
+      time: new Date(event.start).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      title: event.title,
+      client: "Google Calendar",
+      employee: "",
+      color: "bg-blue-400",
+      source: "google"
+    }));
+
+    setAppointments(prev => [
+      ...prev.filter(apt => apt.source !== 'google'), // Remove eventos Google antigos
+      ...formattedGoogleEvents // Adiciona novos eventos Google
+    ]);
   };
 
   // Generate calendar days for March 2024
@@ -175,6 +208,9 @@ export default function Calendar() {
           </Dialog>
         </div>
 
+        {/* Componente de Sincronização do Google Calendar */}
+        <GoogleCalendarSync onEventsSync={handleGoogleEventsSync} />
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Calendar */}
           <Card className="lg:col-span-2">
@@ -221,38 +257,49 @@ export default function Calendar() {
               <CardTitle>Agendamentos do Dia {selectedDate}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {mockAppointments.map((appointment) => (
+              {appointments.map((appointment) => (
                 <div key={appointment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <div className={`w-1 h-12 ${appointment.color} rounded-full`}></div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm">{appointment.time}</span>
                       <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditAppointment(appointment)}
-                          className="p-1 h-auto"
-                        >
-                          <Edit className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteAppointment(appointment.id)}
-                          className="p-1 h-auto text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
+                        {appointment.source === 'google' && (
+                          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">
+                            Google
+                          </span>
+                        )}
+                        {appointment.source === 'local' && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEditAppointment(appointment)}
+                              className="p-1 h-auto"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteAppointment(appointment.id)}
+                              className="p-1 h-auto text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                     <p className="font-semibold text-gray-900">{appointment.title}</p>
                     <p className="text-sm text-gray-600">{appointment.client}</p>
-                    <p className="text-xs text-gray-500">{appointment.employee}</p>
+                    {appointment.employee && (
+                      <p className="text-xs text-gray-500">{appointment.employee}</p>
+                    )}
                   </div>
                 </div>
               ))}
-              {mockAppointments.length === 0 && (
+              {appointments.length === 0 && (
                 <p className="text-center text-gray-500 py-4">
                   Nenhum agendamento para este dia
                 </p>
