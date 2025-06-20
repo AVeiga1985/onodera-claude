@@ -11,11 +11,21 @@ import { toast } from "@/hooks/use-toast";
 import { GoogleCalendarSync } from "@/components/GoogleCalendarSync";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 
-const mockAppointments = [
-  { id: 1, time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink", source: "local" },
-  { id: 2, time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500", source: "local" },
-  { id: 3, time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500", source: "local" },
-  { id: 4, time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500", source: "local" },
+interface Appointment {
+  id: string;
+  time: string;
+  title: string;
+  client: string;
+  employee: string;
+  color: string;
+  source: string;
+}
+
+const mockAppointments: Appointment[] = [
+  { id: "1", time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink", source: "local" },
+  { id: "2", time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500", source: "local" },
+  { id: "3", time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500", source: "local" },
+  { id: "4", time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500", source: "local" },
 ];
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -24,8 +34,8 @@ const currentMonth = "Março 2024";
 export default function Calendar() {
   const [selectedDate, setSelectedDate] = useState(3);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState(null);
-  const [appointments, setAppointments] = useState(mockAppointments);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
   const [formData, setFormData] = useState({
     title: "",
     client: "",
@@ -57,7 +67,7 @@ export default function Calendar() {
     setFormData({ title: "", client: "", employee: "", time: "", date: "" });
   };
 
-  const handleEditAppointment = (appointment: any) => {
+  const handleEditAppointment = (appointment: Appointment) => {
     setEditingAppointment(appointment);
     setFormData({
       title: appointment.title,
@@ -69,7 +79,7 @@ export default function Calendar() {
     setIsDialogOpen(true);
   };
 
-  const handleDeleteAppointment = (id: number) => {
+  const handleDeleteAppointment = (id: string) => {
     console.log("Deleting appointment:", id);
     toast({
       title: "Agendamento excluído!",
@@ -79,7 +89,7 @@ export default function Calendar() {
 
   const handleGoogleEventsSync = (googleEvents: any[]) => {
     // Adicionar eventos do Google ao estado local
-    const formattedGoogleEvents = googleEvents.map((event, index) => ({
+    const formattedGoogleEvents: Appointment[] = googleEvents.map((event, index) => ({
       id: `google-${index}`,
       time: new Date(event.start).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       title: event.title,
