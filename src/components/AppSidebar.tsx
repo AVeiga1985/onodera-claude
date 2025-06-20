@@ -1,5 +1,5 @@
 
-import { Calendar, Home, Users, Stethoscope, DollarSign, User } from "lucide-react";
+import { Calendar, Home, Users, Stethoscope, DollarSign, User, UserCheck } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -23,6 +23,11 @@ const menuItems = [
     title: "Calendário",
     url: "/calendar",
     icon: Calendar,
+  },
+  {
+    title: "Clientes",
+    url: "/clients",
+    icon: UserCheck,
   },
   {
     title: "Tratamentos",
