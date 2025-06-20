@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Plus, Edit, Trash2, Search, Mail, Phone } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Mail, Phone, Loader2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,124 +9,67 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "@/hooks/use-toast";
-
-const mockEmployees = [
-  {
-    id: 1,
-    name: "Dra. Maria Santos",
-    role: "Dermatologista",
-    email: "maria@onodera.com",
-    phone: "(11) 99999-0001",
-    specialties: ["Botox", "Preenchimento", "Limpeza de Pele"],
-    status: "active",
-    avatar: ""
-  },
-  {
-    id: 2,
-    name: "Dra. Patricia Silva",
-    role: "Esteticista",
-    email: "patricia@onodera.com",
-    phone: "(11) 99999-0002",
-    specialties: ["Microagulhamento", "Peeling", "Massagem"],
-    status: "active",
-    avatar: ""
-  },
-  {
-    id: 3,
-    name: "Ana Costa",
-    role: "Recepcionista",
-    email: "ana@onodera.com",
-    phone: "(11) 99999-0003",
-    specialties: ["Atendimento", "Agendamento"],
-    status: "active",
-    avatar: ""
-  },
-  {
-    id: 4,
-    name: "Dr. Carlos Mendes",
-    role: "Dermatologista",
-    email: "carlos@onodera.com",
-    phone: "(11) 99999-0004",
-    specialties: ["Cirurgia", "Laser"],
-    status: "inactive",
-    avatar: ""
-  }
-];
+import { useEmployees } from "@/hooks/useEmployees";
 
 export default function Employees() {
-  const [employees, setEmployees] = useState(mockEmployees);
+  const { employees, loading, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({
-    name: "",
+    nome: "",
     role: "",
     email: "",
-    phone: "",
+    telefone: "",
     specialties: ""
   });
 
   const filteredEmployees = employees.filter(employee =>
-    employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    employee.role.toLowerCase().includes(searchTerm.toLowerCase())
+    employee.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (employee.role && employee.role.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleSubmit = () => {
-    const specialtiesArray = formData.specialties.split(',').map(s => s.trim()).filter(s => s);
-    
+  const handleSubmit = async () => {
+    const employeeData = {
+      nome: formData.nome,
+      email: formData.email,
+      telefone: formData.telefone,
+      role: formData.role,
+      specialties: formData.specialties.split(',').map(s => s.trim()).filter(s => s),
+      status: "active",
+      avatar: ""
+    };
+
     if (editingEmployee) {
-      setEmployees(employees.map(e => 
-        e.id === editingEmployee.id 
-          ? { ...e, ...formData, specialties: specialtiesArray }
-          : e
-      ));
-      toast({
-        title: "Funcionário atualizado!",
-        description: "As informações foram salvas com sucesso.",
-      });
+      await updateEmployee(editingEmployee.id, employeeData);
     } else {
-      const newEmployee = {
-        id: employees.length + 1,
-        ...formData,
-        specialties: specialtiesArray,
-        status: "active",
-        avatar: ""
-      };
-      setEmployees([...employees, newEmployee]);
-      toast({
-        title: "Funcionário criado!",
-        description: "O novo funcionário foi adicionado com sucesso.",
-      });
+      await createEmployee(employeeData);
     }
     
     setIsDialogOpen(false);
     setEditingEmployee(null);
-    setFormData({ name: "", role: "", email: "", phone: "", specialties: "" });
+    setFormData({ nome: "", role: "", email: "", telefone: "", specialties: "" });
   };
 
   const handleEdit = (employee: any) => {
     setEditingEmployee(employee);
     setFormData({
-      name: employee.name,
-      role: employee.role,
-      email: employee.email,
-      phone: employee.phone,
-      specialties: employee.specialties.join(', ')
+      nome: employee.nome || "",
+      role: employee.role || "",
+      email: employee.email || "",
+      telefone: employee.telefone || "",
+      specialties: employee.specialties?.join(', ') || ""
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: number) => {
-    setEmployees(employees.filter(e => e.id !== id));
-    toast({
-      title: "Funcionário excluído!",
-      description: "O funcionário foi removido com sucesso.",
-    });
+  const handleDelete = async (id: number) => {
+    await deleteEmployee(id);
   };
 
-  const getRoleColor = (role: string) => {
-    const colors = {
+  const getRoleColor = (role: string | undefined) => {
+    if (!role) return "bg-gray-100 text-gray-800";
+    const colors: Record<string, string> = {
       "Dermatologista": "bg-purple-100 text-purple-800",
       "Esteticista": "bg-blue-100 text-blue-800",
       "Recepcionista": "bg-green-100 text-green-800"
@@ -134,9 +77,21 @@ export default function Employees() {
     return colors[role] || "bg-gray-100 text-gray-800";
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null) => {
+    if (!name) return "??";
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <span className="ml-2">Carregando funcionários...</span>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -164,11 +119,11 @@ export default function Employees() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Nome Completo</Label>
+                  <Label htmlFor="nome">Nome Completo</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
                     placeholder="Ex: Dr. João Silva"
                   />
                 </div>
@@ -183,11 +138,11 @@ export default function Employees() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone">Telefone</Label>
+                    <Label htmlFor="telefone">Telefone</Label>
                     <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      id="telefone"
+                      value={formData.telefone}
+                      onChange={(e) => setFormData({...formData, telefone: e.target.value})}
                       placeholder="(11) 99999-9999"
                     />
                   </div>
@@ -247,17 +202,19 @@ export default function Employees() {
                   <Avatar className="w-12 h-12">
                     <AvatarImage src={employee.avatar} />
                     <AvatarFallback className="bg-onodera-pink text-white">
-                      {getInitials(employee.name)}
+                      {getInitials(employee.nome)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{employee.name}</CardTitle>
+                    <CardTitle className="text-lg">{employee.nome}</CardTitle>
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getRoleColor(employee.role)}>
-                        {employee.role}
-                      </Badge>
-                      <Badge variant={employee.status === 'active' ? 'default' : 'secondary'}>
-                        {employee.status === 'active' ? 'Ativo' : 'Inativo'}
+                      {employee.role && (
+                        <Badge className={getRoleColor(employee.role)}>
+                          {employee.role}
+                        </Badge>
+                      )}
+                      <Badge variant="default">
+                        Ativo
                       </Badge>
                     </div>
                   </div>
@@ -288,16 +245,16 @@ export default function Employees() {
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Phone className="w-4 h-4" />
-                  <span>{employee.phone}</span>
+                  <span>{employee.telefone}</span>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Especialidades:</p>
                   <div className="flex flex-wrap gap-1">
-                    {employee.specialties.map((specialty, index) => (
+                    {employee.specialties?.map((specialty, index) => (
                       <Badge key={index} variant="outline" className="text-xs">
                         {specialty}
                       </Badge>
-                    ))}
+                    )) || <span className="text-gray-500 text-xs">Nenhuma especialidade informada</span>}
                   </div>
                 </div>
               </CardContent>

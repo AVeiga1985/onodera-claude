@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Loader2 } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,124 +9,83 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "@/hooks/use-toast";
-
-const mockTreatments = [
-  {
-    id: 1,
-    name: "Limpeza de Pele Profunda",
-    description: "Remoção de cravos, espinhas e impurezas com extração manual",
-    price: 120,
-    duration: 60,
-    category: "Facial",
-    status: "active"
-  },
-  {
-    id: 2,
-    name: "Botox",
-    description: "Aplicação de toxina botulínica para redução de rugas",
-    price: 800,
-    duration: 30,
-    category: "Injetáveis",
-    status: "active"
-  },
-  {
-    id: 3,
-    name: "Preenchimento com Ácido Hialurônico",
-    description: "Preenchimento facial para aumento de volume e redução de rugas",
-    price: 1200,
-    duration: 45,
-    category: "Injetáveis",
-    status: "active"
-  },
-  {
-    id: 4,
-    name: "Microagulhamento",
-    description: "Estimulação do colágeno através de micro perfurações na pele",
-    price: 300,
-    duration: 90,
-    category: "Corporal",
-    status: "inactive"
-  }
-];
+import { useTreatments } from "@/hooks/useTreatments";
 
 export default function Treatments() {
-  const [treatments, setTreatments] = useState(mockTreatments);
+  const { treatments, loading, createTreatment, updateTreatment, deleteTreatment } = useTreatments();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTreatment, setEditingTreatment] = useState(null);
+  const [editingTreatment, setEditingTreatment] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    price: "",
-    duration: "",
-    category: ""
+    nome: "",
+    descricao: "",
+    preco: "",
+    categoria: "",
+    duration: ""
   });
 
   const filteredTreatments = treatments.filter(treatment =>
-    treatment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    treatment.category.toLowerCase().includes(searchTerm.toLowerCase())
+    treatment.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (treatment.categoria && treatment.categoria.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    const treatmentData = {
+      nome: formData.nome,
+      descricao: formData.descricao,
+      preco: formData.preco ? Number(formData.preco) : null,
+      categoria: formData.categoria,
+      duration: formData.duration ? Number(formData.duration) : undefined,
+      status: "active"
+    };
+
     if (editingTreatment) {
-      setTreatments(treatments.map(t => 
-        t.id === editingTreatment.id 
-          ? { ...t, ...formData, price: Number(formData.price), duration: Number(formData.duration) }
-          : t
-      ));
-      toast({
-        title: "Tratamento atualizado!",
-        description: "As informações foram salvas com sucesso.",
-      });
+      await updateTreatment(editingTreatment.id, treatmentData);
     } else {
-      const newTreatment = {
-        id: treatments.length + 1,
-        ...formData,
-        price: Number(formData.price),
-        duration: Number(formData.duration),
-        status: "active"
-      };
-      setTreatments([...treatments, newTreatment]);
-      toast({
-        title: "Tratamento criado!",
-        description: "O novo tratamento foi adicionado com sucesso.",
-      });
+      await createTreatment(treatmentData);
     }
     
     setIsDialogOpen(false);
     setEditingTreatment(null);
-    setFormData({ name: "", description: "", price: "", duration: "", category: "" });
+    setFormData({ nome: "", descricao: "", preco: "", categoria: "", duration: "" });
   };
 
   const handleEdit = (treatment: any) => {
     setEditingTreatment(treatment);
     setFormData({
-      name: treatment.name,
-      description: treatment.description,
-      price: treatment.price.toString(),
-      duration: treatment.duration.toString(),
-      category: treatment.category
+      nome: treatment.nome || "",
+      descricao: treatment.descricao || "",
+      preco: treatment.preco?.toString() || "",
+      categoria: treatment.categoria || "",
+      duration: treatment.duration?.toString() || ""
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: number) => {
-    setTreatments(treatments.filter(t => t.id !== id));
-    toast({
-      title: "Tratamento excluído!",
-      description: "O tratamento foi removido com sucesso.",
-    });
+  const handleDelete = async (id: number) => {
+    await deleteTreatment(id);
   };
 
-  const getCategoryColor = (category: string) => {
-    const colors = {
+  const getCategoryColor = (category: string | undefined) => {
+    if (!category) return "bg-gray-100 text-gray-800";
+    const colors: Record<string, string> = {
       "Facial": "bg-blue-100 text-blue-800",
       "Injetáveis": "bg-purple-100 text-purple-800",
       "Corporal": "bg-green-100 text-green-800"
     };
     return colors[category] || "bg-gray-100 text-gray-800";
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <span className="ml-2">Carregando tratamentos...</span>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -154,32 +113,32 @@ export default function Treatments() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Nome do Tratamento</Label>
+                  <Label htmlFor="nome">Nome do Tratamento</Label>
                   <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
                     placeholder="Ex: Limpeza de pele"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="description">Descrição</Label>
+                  <Label htmlFor="descricao">Descrição</Label>
                   <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    id="descricao"
+                    value={formData.descricao}
+                    onChange={(e) => setFormData({...formData, descricao: e.target.value})}
                     placeholder="Descreva o procedimento..."
                     rows={3}
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <Label htmlFor="price">Preço (R$)</Label>
+                    <Label htmlFor="preco">Preço (R$)</Label>
                     <Input
-                      id="price"
+                      id="preco"
                       type="number"
-                      value={formData.price}
-                      onChange={(e) => setFormData({...formData, price: e.target.value})}
+                      value={formData.preco}
+                      onChange={(e) => setFormData({...formData, preco: e.target.value})}
                       placeholder="0.00"
                     />
                   </div>
@@ -194,11 +153,11 @@ export default function Treatments() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="category">Categoria</Label>
+                    <Label htmlFor="categoria">Categoria</Label>
                     <Input
-                      id="category"
-                      value={formData.category}
-                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      id="categoria"
+                      value={formData.categoria}
+                      onChange={(e) => setFormData({...formData, categoria: e.target.value})}
                       placeholder="Ex: Facial"
                     />
                   </div>
@@ -237,13 +196,15 @@ export default function Treatments() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{treatment.name}</CardTitle>
+                    <CardTitle className="text-lg">{treatment.nome}</CardTitle>
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getCategoryColor(treatment.category)}>
-                        {treatment.category}
-                      </Badge>
-                      <Badge variant={treatment.status === 'active' ? 'default' : 'secondary'}>
-                        {treatment.status === 'active' ? 'Ativo' : 'Inativo'}
+                      {treatment.categoria && (
+                        <Badge className={getCategoryColor(treatment.categoria)}>
+                          {treatment.categoria}
+                        </Badge>
+                      )}
+                      <Badge variant="default">
+                        Ativo
                       </Badge>
                     </div>
                   </div>
@@ -269,15 +230,15 @@ export default function Treatments() {
               </CardHeader>
               <CardContent>
                 <CardDescription className="mb-4 line-clamp-2">
-                  {treatment.description}
+                  {treatment.descricao}
                 </CardDescription>
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-2xl font-bold text-onodera-pink">
-                      R$ {treatment.price}
+                      R$ {treatment.preco || 0}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {treatment.duration} minutos
+                      {treatment.duration || 60} minutos
                     </p>
                   </div>
                 </div>
