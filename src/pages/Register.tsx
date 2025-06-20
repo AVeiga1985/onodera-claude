@@ -1,10 +1,10 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -13,10 +13,29 @@ export default function Register() {
     password: "",
     confirmPassword: ""
   });
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { signUp, user } = useAuth();
 
-  const handleRegister = (e: React.FormEvent) => {
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+      toast({
+        title: "Erro",
+        description: "Por favor, preencha todos os campos",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       toast({
         title: "Erro",
@@ -25,12 +44,35 @@ export default function Register() {
       });
       return;
     }
+
+    if (formData.password.length < 6) {
+      toast({
+        title: "Erro",
+        description: "A senha deve ter pelo menos 6 caracteres",
+        variant: "destructive"
+      });
+      return;
+    }
     
-    toast({
-      title: "Cadastro realizado com sucesso!",
-      description: "Bem-vindo à Onodera Estética",
-    });
-    navigate("/dashboard");
+    setLoading(true);
+    const { error } = await signUp(formData.email, formData.password, formData.name);
+    
+    if (error) {
+      toast({
+        title: "Erro ao criar conta",
+        description: error.message === "User already registered" 
+          ? "Este email já está cadastrado" 
+          : error.message,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Conta criada com sucesso!",
+        description: "Verifique seu email para confirmar a conta",
+      });
+      navigate("/login");
+    }
+    setLoading(false);
   };
 
   const handleGoogleRegister = () => {
@@ -61,6 +103,7 @@ export default function Register() {
               onChange={(e) => setFormData({...formData, name: e.target.value})}
               className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
               required
+              disabled={loading}
             />
             <Input
               type="email"
@@ -69,14 +112,16 @@ export default function Register() {
               onChange={(e) => setFormData({...formData, email: e.target.value})}
               className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
               required
+              disabled={loading}
             />
             <Input
               type="password"
-              placeholder="Senha"
+              placeholder="Senha (mín. 6 caracteres)"
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
               className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
               required
+              disabled={loading}
             />
             <Input
               type="password"
@@ -85,12 +130,14 @@ export default function Register() {
               onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
               className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
               required
+              disabled={loading}
             />
             <Button 
               type="submit" 
               className="w-full h-12 bg-onodera-pink hover:bg-onodera-dark-pink text-white font-medium"
+              disabled={loading}
             >
-              Criar Conta
+              {loading ? "Criando conta..." : "Criar Conta"}
             </Button>
           </form>
           
@@ -107,6 +154,7 @@ export default function Register() {
             onClick={handleGoogleRegister}
             variant="outline"
             className="w-full h-12 border-gray-200 hover:bg-gray-50"
+            disabled={loading}
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -123,6 +171,7 @@ export default function Register() {
               <button 
                 onClick={() => navigate("/login")}
                 className="text-onodera-pink hover:text-onodera-dark-pink font-medium"
+                disabled={loading}
               >
                 Entrar
               </button>

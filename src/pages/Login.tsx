@@ -1,25 +1,55 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { signIn, user } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email && password) {
+    if (!email || !password) {
+      toast({
+        title: "Erro",
+        description: "Por favor, preencha todos os campos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await signIn(email, password);
+    
+    if (error) {
+      toast({
+        title: "Erro ao fazer login",
+        description: error.message === "Invalid login credentials" 
+          ? "Email ou senha incorretos" 
+          : error.message,
+        variant: "destructive"
+      });
+    } else {
       toast({
         title: "Login realizado com sucesso!",
         description: "Bem-vindo à Onodera Estética",
       });
       navigate("/dashboard");
     }
+    setLoading(false);
   };
 
   const handleGoogleLogin = () => {
@@ -51,6 +81,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
                 required
+                disabled={loading}
               />
             </div>
             <div>
@@ -61,13 +92,15 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-12 border-gray-200 focus:border-onodera-pink focus:ring-onodera-pink"
                 required
+                disabled={loading}
               />
             </div>
             <Button 
               type="submit" 
               className="w-full h-12 bg-onodera-pink hover:bg-onodera-dark-pink text-white font-medium"
+              disabled={loading}
             >
-              Entrar
+              {loading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
           
@@ -84,6 +117,7 @@ export default function Login() {
             onClick={handleGoogleLogin}
             variant="outline"
             className="w-full h-12 border-gray-200 hover:bg-gray-50"
+            disabled={loading}
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -100,6 +134,7 @@ export default function Login() {
               <button 
                 onClick={() => navigate("/register")}
                 className="text-onodera-pink hover:text-onodera-dark-pink font-medium"
+                disabled={loading}
               >
                 Cadastre-se
               </button>
