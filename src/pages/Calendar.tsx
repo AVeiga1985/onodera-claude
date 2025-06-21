@@ -1,5 +1,6 @@
+
 import { useState } from "react";
-import { Calendar as CalendarIcon, Plus, Edit, Trash2 } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,20 +20,27 @@ interface Appointment {
   employee: string;
   color: string;
   source: string;
+  date?: string;
 }
 
 const mockAppointments: Appointment[] = [
-  { id: "1", time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink", source: "local" },
-  { id: "2", time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500", source: "local" },
-  { id: "3", time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500", source: "local" },
-  { id: "4", time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500", source: "local" },
+  { id: "1", time: "09:30", title: "Limpeza de Pele", client: "Ana Silva", employee: "Dra. Maria", color: "bg-onodera-pink", source: "local", date: "2024-12-21" },
+  { id: "2", time: "11:45", title: "Botox", client: "Carlos Santos", employee: "Dra. Patricia", color: "bg-blue-500", source: "local", date: "2024-12-21" },
+  { id: "3", time: "14:00", title: "Preenchimento", client: "Julia Costa", employee: "Dra. Maria", color: "bg-green-500", source: "local", date: "2024-12-22" },
+  { id: "4", time: "16:30", title: "Microagulhamento", client: "Pedro Alves", employee: "Dra. Patricia", color: "bg-purple-500", source: "local", date: "2024-12-23" },
 ];
 
 const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const currentMonth = "Março 2024";
+const monthNames = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+];
 
 export default function Calendar() {
-  const [selectedDate, setSelectedDate] = useState(3);
+  const currentDate = new Date();
+  const [currentMonth, setCurrentMonth] = useState(currentDate.getMonth());
+  const [currentYear, setCurrentYear] = useState(currentDate.getFullYear());
+  const [selectedDate, setSelectedDate] = useState(currentDate.getDate());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
@@ -74,13 +82,14 @@ export default function Calendar() {
       client: appointment.client,
       employee: appointment.employee,
       time: appointment.time,
-      date: selectedDate.toString()
+      date: appointment.date || `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`
     });
     setIsDialogOpen(true);
   };
 
   const handleDeleteAppointment = (id: string) => {
     console.log("Deleting appointment:", id);
+    setAppointments(prev => prev.filter(apt => apt.id !== id));
     toast({
       title: "Agendamento excluído!",
       description: "O compromisso foi removido do calendário.",
@@ -96,7 +105,8 @@ export default function Calendar() {
       client: "Google Calendar",
       employee: "",
       color: "bg-blue-400",
-      source: "google"
+      source: "google",
+      date: new Date(event.start).toISOString().split('T')[0]
     }));
 
     setAppointments(prev => [
@@ -105,11 +115,31 @@ export default function Calendar() {
     ]);
   };
 
-  // Generate calendar days for March 2024
+  const handlePreviousMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else {
+      setCurrentMonth(currentMonth - 1);
+    }
+    setSelectedDate(1); // Reset to first day of month
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(currentMonth + 1);
+    }
+    setSelectedDate(1); // Reset to first day of month
+  };
+
+  // Generate calendar days for current month
   const generateCalendarDays = () => {
     const days = [];
-    const daysInMonth = 31;
-    const firstDayOfWeek = 5; // March 1, 2024 is a Friday (5)
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
     
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfWeek; i++) {
@@ -126,100 +156,114 @@ export default function Calendar() {
 
   const calendarDays = generateCalendarDays();
 
+  // Filter appointments for selected date
+  const selectedDateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
+  const appointmentsForSelectedDate = appointments.filter(apt => apt.date === selectedDateString);
+
+  // Check if a day has appointments
+  const hasAppointments = (day: number) => {
+    const dateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return appointments.some(apt => apt.date === dateString);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Calendário</h1>
             <p className="text-gray-600">Gerencie seus agendamentos</p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-onodera-pink hover:bg-onodera-dark-pink">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Agendamento
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {editingAppointment ? "Editar Agendamento" : "Novo Agendamento"}
-                </DialogTitle>
-                <DialogDescription>
-                  Preencha os dados do agendamento
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="title">Procedimento</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    placeholder="Ex: Limpeza de pele"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="client">Cliente</Label>
-                  <Input
-                    id="client"
-                    value={formData.client}
-                    onChange={(e) => setFormData({...formData, client: e.target.value})}
-                    placeholder="Nome do cliente"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="employee">Profissional</Label>
-                  <Select value={formData.employee} onValueChange={(value) => setFormData({...formData, employee: value})}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar profissional" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="maria">Dra. Maria</SelectItem>
-                      <SelectItem value="patricia">Dra. Patricia</SelectItem>
-                      <SelectItem value="ana">Dra. Ana</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-3">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-onodera-pink hover:bg-onodera-dark-pink w-full">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Agendamento
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingAppointment ? "Editar Agendamento" : "Novo Agendamento"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Preencha os dados do agendamento
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="time">Horário</Label>
+                    <Label htmlFor="title">Procedimento</Label>
                     <Input
-                      id="time"
-                      type="time"
-                      value={formData.time}
-                      onChange={(e) => setFormData({...formData, time: e.target.value})}
+                      id="title"
+                      value={formData.title}
+                      onChange={(e) => setFormData({...formData, title: e.target.value})}
+                      placeholder="Ex: Limpeza de pele"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="date">Data</Label>
+                    <Label htmlFor="client">Cliente</Label>
                     <Input
-                      id="date"
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      id="client"
+                      value={formData.client}
+                      onChange={(e) => setFormData({...formData, client: e.target.value})}
+                      placeholder="Nome do cliente"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="employee">Profissional</Label>
+                    <Select value={formData.employee} onValueChange={(value) => setFormData({...formData, employee: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecionar profissional" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="maria">Dra. Maria</SelectItem>
+                        <SelectItem value="patricia">Dra. Patricia</SelectItem>
+                        <SelectItem value="ana">Dra. Ana</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="time">Horário</Label>
+                      <Input
+                        id="time"
+                        type="time"
+                        value={formData.time}
+                        onChange={(e) => setFormData({...formData, time: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="date">Data</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({...formData, date: e.target.value})}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={handleCreateAppointment}
-                  className="bg-onodera-pink hover:bg-onodera-dark-pink"
-                >
-                  {editingAppointment ? "Salvar" : "Criar"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleCreateAppointment}
+                    className="bg-onodera-pink hover:bg-onodera-dark-pink"
+                  >
+                    {editingAppointment ? "Salvar" : "Criar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
+            {/* Componente de Sincronização do Google Calendar */}
+            <div className="w-full">
+              <GoogleCalendarSync onEventsSync={handleGoogleEventsSync} />
+            </div>
+          </div>
         </div>
-
-        {/* Componente de Sincronização do Google Calendar */}
-        <GoogleCalendarSync onEventsSync={handleGoogleEventsSync} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Calendar */}
@@ -227,11 +271,15 @@ export default function Calendar() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5" />
-                {currentMonth}
+                {monthNames[currentMonth]} {currentYear}
               </CardTitle>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">←</Button>
-                <Button variant="outline" size="sm">→</Button>
+                <Button variant="outline" size="sm" onClick={handlePreviousMonth}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNextMonth}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -248,13 +296,16 @@ export default function Calendar() {
                     key={index}
                     onClick={() => day && setSelectedDate(day)}
                     className={`
-                      p-2 text-center text-sm rounded-lg border transition-colors
+                      p-2 text-center text-sm rounded-lg border transition-colors relative
                       ${!day ? 'invisible' : ''}
                       ${day === selectedDate ? 'bg-onodera-pink text-white' : 'hover:bg-gray-100'}
-                      ${day === 19 || day === 25 ? 'bg-blue-100 text-blue-600' : ''}
+                      ${day && hasAppointments(day) && day !== selectedDate ? 'bg-blue-50 border-blue-200' : ''}
                     `}
                   >
                     {day}
+                    {day && hasAppointments(day) && (
+                      <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -265,9 +316,12 @@ export default function Calendar() {
           <Card>
             <CardHeader>
               <CardTitle>Agendamentos do Dia {selectedDate}</CardTitle>
+              <p className="text-sm text-gray-500">
+                {monthNames[currentMonth]} {currentYear}
+              </p>
             </CardHeader>
             <CardContent className="space-y-3">
-              {appointments.map((appointment) => (
+              {appointmentsForSelectedDate.map((appointment) => (
                 <div key={appointment.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <div className={`w-1 h-12 ${appointment.color} rounded-full`}></div>
                   <div className="flex-1">
@@ -309,7 +363,7 @@ export default function Calendar() {
                   </div>
                 </div>
               ))}
-              {appointments.length === 0 && (
+              {appointmentsForSelectedDate.length === 0 && (
                 <p className="text-center text-gray-500 py-4">
                   Nenhum agendamento para este dia
                 </p>

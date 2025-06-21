@@ -248,20 +248,26 @@ export type Database = {
           especialista_id: number | null
           id: number
           notas: string | null
+          status: boolean | null
+          tipo: string | null
         }
         Insert: {
           cliente_id?: number | null
           data_follow_up?: string | null
           especialista_id?: number | null
-          id?: never
+          id?: number
           notas?: string | null
+          status?: boolean | null
+          tipo?: string | null
         }
         Update: {
           cliente_id?: number | null
           data_follow_up?: string | null
           especialista_id?: number | null
-          id?: never
+          id?: number
           notas?: string | null
+          status?: boolean | null
+          tipo?: string | null
         }
         Relationships: [
           {
