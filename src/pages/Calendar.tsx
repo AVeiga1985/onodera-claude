@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Calendar as CalendarIcon, Plus, Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Layout } from "@/components/Layout";
@@ -57,22 +56,59 @@ export default function Calendar() {
   const handleCreateAppointment = async () => {
     console.log("Creating appointment:", formData);
 
-    // Criar no Google Calendar também
-    if (formData.title && formData.time && formData.date) {
-      await createEvent({
-        title: formData.title,
-        start: `${formData.date}T${formData.time}:00`,
-        end: `${formData.date}T${formData.time}:00`,
-        description: `Cliente: ${formData.client}\nProfissional: ${formData.employee}`
+    if (!formData.title || !formData.time || !formData.date) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha todos os campos obrigatórios.",
+        variant: "destructive"
       });
+      return;
     }
 
-    toast({
-      title: "Agendamento criado!",
-      description: "O compromisso foi adicionado ao calendário e sincronizado com o Google Calendar.",
-    });
-    setIsDialogOpen(false);
-    setFormData({ title: "", client: "", employee: "", time: "", date: "" });
+    try {
+      // Criar agendamento local
+      const newAppointment: Appointment = {
+        id: `local-${Date.now()}`,
+        time: formData.time,
+        title: formData.title,
+        client: formData.client,
+        employee: formData.employee,
+        color: "bg-onodera-pink",
+        source: "local",
+        date: formData.date
+      };
+
+      setAppointments(prev => [...prev, newAppointment]);
+
+      // Criar no Google Calendar também se preenchido
+      const startDateTime = `${formData.date}T${formData.time}:00`;
+      const endDateTime = `${formData.date}T${formData.time}:00`;
+      
+      await createEvent({
+        title: formData.title,
+        start: startDateTime,
+        end: endDateTime,
+        client: formData.client,
+        employee: formData.employee,
+        description: `Cliente: ${formData.client}\nProfissional: ${formData.employee}`
+      });
+
+      toast({
+        title: "Agendamento criado!",
+        description: "O compromisso foi adicionado ao calendário e sincronizado com o Google Calendar.",
+      });
+
+      setIsDialogOpen(false);
+      setEditingAppointment(null);
+      setFormData({ title: "", client: "", employee: "", time: "", date: "" });
+    } catch (error) {
+      console.error("Error creating appointment:", error);
+      toast({
+        title: "Erro ao criar agendamento",
+        description: "Houve um problema ao criar o agendamento.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleEditAppointment = (appointment: Appointment) => {
@@ -97,22 +133,42 @@ export default function Calendar() {
   };
 
   const handleGoogleEventsSync = (googleEvents: any[]) => {
-    // Adicionar eventos do Google ao estado local
-    const formattedGoogleEvents: Appointment[] = googleEvents.map((event, index) => ({
-      id: `google-${index}`,
-      time: new Date(event.start).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      title: event.title,
-      client: "Google Calendar",
-      employee: "",
-      color: "bg-blue-400",
-      source: "google",
-      date: new Date(event.start).toISOString().split('T')[0]
-    }));
+    console.log("Syncing Google events:", googleEvents);
+    
+    // Mapear eventos do Google para formato local
+    const formattedGoogleEvents: Appointment[] = googleEvents.map((event, index) => {
+      const eventDate = new Date(event.start);
+      const dateString = eventDate.toISOString().split('T')[0];
+      const timeString = eventDate.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
 
+      return {
+        id: event.id || `google-${index}`,
+        time: timeString,
+        title: event.title || 'Evento Google',
+        client: event.description || "Google Calendar",
+        employee: "",
+        color: "bg-blue-400",
+        source: "google",
+        date: dateString
+      };
+    });
+
+    // Remover eventos Google antigos e adicionar novos
     setAppointments(prev => [
-      ...prev.filter(apt => apt.source !== 'google'), // Remove eventos Google antigos
-      ...formattedGoogleEvents // Adiciona novos eventos Google
+      ...prev.filter(apt => apt.source !== 'google'),
+      ...formattedGoogleEvents
     ]);
+
+    if (formattedGoogleEvents.length > 0) {
+      toast({
+        title: "Eventos sincronizados!",
+        description: `${formattedGoogleEvents.length} eventos do Google Calendar foram importados.`,
+      });
+    }
   };
 
   const handlePreviousMonth = () => {
@@ -174,7 +230,7 @@ export default function Calendar() {
             <h1 className="text-3xl font-bold text-gray-900">Calendário</h1>
             <p className="text-gray-600">Gerencie seus agendamentos</p>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 w-80">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-onodera-pink hover:bg-onodera-dark-pink w-full">
@@ -193,12 +249,13 @@ export default function Calendar() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="title">Procedimento</Label>
+                    <Label htmlFor="title">Procedimento *</Label>
                     <Input
                       id="title"
                       value={formData.title}
                       onChange={(e) => setFormData({...formData, title: e.target.value})}
                       placeholder="Ex: Limpeza de pele"
+                      required
                     />
                   </div>
                   <div>
@@ -225,27 +282,33 @@ export default function Calendar() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="time">Horário</Label>
+                      <Label htmlFor="time">Horário *</Label>
                       <Input
                         id="time"
                         type="time"
                         value={formData.time}
                         onChange={(e) => setFormData({...formData, time: e.target.value})}
+                        required
                       />
                     </div>
                     <div>
-                      <Label htmlFor="date">Data</Label>
+                      <Label htmlFor="date">Data *</Label>
                       <Input
                         id="date"
                         type="date"
                         value={formData.date}
                         onChange={(e) => setFormData({...formData, date: e.target.value})}
+                        required
                       />
                     </div>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setIsDialogOpen(false);
+                    setEditingAppointment(null);
+                    setFormData({ title: "", client: "", employee: "", time: "", date: "" });
+                  }}>
                     Cancelar
                   </Button>
                   <Button 
@@ -258,10 +321,7 @@ export default function Calendar() {
               </DialogContent>
             </Dialog>
             
-            {/* Componente de Sincronização do Google Calendar */}
-            <div className="w-full">
-              <GoogleCalendarSync onEventsSync={handleGoogleEventsSync} />
-            </div>
+            <GoogleCalendarSync onEventsSync={handleGoogleEventsSync} />
           </div>
         </div>
 

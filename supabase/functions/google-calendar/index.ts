@@ -31,16 +31,20 @@ serve(async (req) => {
     const { action, ...body } = await req.json();
 
     switch (action) {
+      case 'check_connection':
+        const isConnected = await checkGoogleConnection(user.id, supabaseClient);
+        return new Response(JSON.stringify({ connected: isConnected }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+
       case 'sync_events':
-        // Sincronizar eventos do Google Calendar
-        const events = await syncGoogleCalendarEvents(user.id);
+        const events = await syncGoogleCalendarEvents(user.id, supabaseClient);
         return new Response(JSON.stringify({ events }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
       case 'create_event':
-        // Criar evento no Google Calendar
-        const newEvent = await createGoogleCalendarEvent(body);
+        const newEvent = await createGoogleCalendarEvent(user.id, body, supabaseClient);
         return new Response(JSON.stringify({ event: newEvent }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -58,33 +62,148 @@ serve(async (req) => {
   }
 });
 
-async function syncGoogleCalendarEvents(userId: string) {
-  // Aqui você implementaria a lógica para buscar eventos do Google Calendar
-  // Por enquanto, retorno dados mock
-  return [
-    {
-      id: 'google-1',
-      title: 'Reunião Google',
-      start: '2024-03-15T10:00:00',
-      end: '2024-03-15T11:00:00',
-      source: 'google'
-    },
-    {
-      id: 'google-2', 
-      title: 'Consulta Médica',
-      start: '2024-03-15T14:00:00',
-      end: '2024-03-15T15:00:00',
-      source: 'google'
+async function checkGoogleConnection(userId: string, supabase: any) {
+  try {
+    // Verificar se o usuário tem token de acesso do Google válido
+    const { data: session } = await supabase.auth.getSession();
+    
+    if (!session?.provider_token) {
+      return false;
     }
-  ];
+
+    // Testar conexão com Google Calendar API
+    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary', {
+      headers: {
+        'Authorization': `Bearer ${session.provider_token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('Error checking Google connection:', error);
+    return false;
+  }
 }
 
-async function createGoogleCalendarEvent(eventData: any) {
-  // Aqui você implementaria a lógica para criar evento no Google Calendar
-  console.log('Creating Google Calendar event:', eventData);
-  return {
-    id: `google-${Date.now()}`,
-    ...eventData,
-    source: 'google'
-  };
+async function syncGoogleCalendarEvents(userId: string, supabase: any) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    
+    if (!session?.provider_token) {
+      throw new Error('No Google access token found');
+    }
+
+    // Obter eventos dos próximos 30 dias
+    const timeMin = new Date().toISOString();
+    const timeMax = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`,
+      {
+        headers: {
+          'Authorization': `Bearer ${session.provider_token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Google API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Mapear eventos do Google para formato local
+    const events = data.items?.map((event: any) => ({
+      id: `google-${event.id}`,
+      title: event.summary || 'Sem título',
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+      description: event.description || '',
+      location: event.location || '',
+      source: 'google',
+      google_event_id: event.id
+    })) || [];
+
+    // Salvar eventos na tabela agendamento
+    for (const event of events) {
+      try {
+        await supabase.from('agendamento').upsert({
+          nome_completo: 'Google Calendar',
+          data_agendamento: event.start,
+          status: 'confirmado',
+          email: 'google@calendar.com',
+          telefone: '',
+        }, {
+          onConflict: 'data_agendamento,email'
+        });
+      } catch (error) {
+        console.error('Error saving event to database:', error);
+      }
+    }
+
+    return events;
+  } catch (error) {
+    console.error('Error syncing Google Calendar events:', error);
+    throw error;
+  }
+}
+
+async function createGoogleCalendarEvent(userId: string, eventData: any, supabase: any) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    
+    if (!session?.provider_token) {
+      throw new Error('No Google access token found');
+    }
+
+    const googleEvent = {
+      summary: eventData.title,
+      description: eventData.description || `Cliente: ${eventData.client}\nProfissional: ${eventData.employee}`,
+      start: {
+        dateTime: eventData.start,
+        timeZone: 'America/Sao_Paulo',
+      },
+      end: {
+        dateTime: eventData.end || eventData.start,
+        timeZone: 'America/Sao_Paulo',
+      },
+      location: eventData.location || '',
+    };
+
+    const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.provider_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(googleEvent),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google API error: ${response.status}`);
+    }
+
+    const createdEvent = await response.json();
+    
+    // Salvar também na tabela local
+    await supabase.from('agendamento').insert({
+      nome_completo: eventData.client || 'Cliente Google',
+      data_agendamento: eventData.start,
+      status: 'confirmado',
+      email: eventData.email || 'google@calendar.com',
+      telefone: eventData.phone || '',
+    });
+
+    return {
+      id: `google-${createdEvent.id}`,
+      ...eventData,
+      google_event_id: createdEvent.id,
+      source: 'google'
+    };
+  } catch (error) {
+    console.error('Error creating Google Calendar event:', error);
+    throw error;
+  }
 }
